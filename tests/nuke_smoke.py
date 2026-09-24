@@ -42,7 +42,15 @@ assert len(new_writes) == 1, f"Export Write button created {len(new_writes)} nod
 write = new_writes.pop()
 assert write.input(0) is group
 assert write["channels"].value() == "all"
+assert write["create_directories"].value()
 assert "verify_write_ready" in write["beforeRender"].value()
+write["file"].setValue((root / ".runtime" / "single.exr").as_posix())
+try:
+    nuke_node._work_pattern(group, write)
+except ValueError as exc:
+    assert "####" in str(exc)
+else:
+    raise AssertionError("A single-file output must be rejected")
 write["file"].setValue((root / ".runtime" / "smoke_export.####.exr").as_posix())
 assert nuke_node._work_pattern(group, write).endswith("smartvector.####.exr")
 try:

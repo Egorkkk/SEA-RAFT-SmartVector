@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import uuid
@@ -53,6 +54,12 @@ def _work_pattern(node, write):
     output = write["file"].evaluate()
     if not output or not output.lower().endswith(".exr"):
         raise ValueError("Set an EXR sequence path on the Export Write node first")
+    if not re.search(r"(?:#+|%0?\d*d)", Path(write["file"].getText()).name):
+        raise ValueError("Export Write filename must contain #### or %04d for a frame sequence")
+    if write["file_type"].value() != "exr" or write["channels"].value() != "all":
+        raise ValueError("Export Write must use EXR and all channels")
+    if "datatype" in write.knobs() and write["datatype"].value() != "32 bit float":
+        raise ValueError("Export Write must use 32 bit float EXR")
     if "work_directory" in node.knobs() and _knob(node, "work_directory"):
         base = Path(node["work_directory"].evaluate()).expanduser().resolve()
     else:
@@ -279,6 +286,8 @@ def export_write(node=None):
         nuke.root().end()
     write["file_type"].setValue("exr")
     write["channels"].setValue("all")
+    if "create_directories" in write.knobs():
+        write["create_directories"].setValue(True)
     if "datatype" in write.knobs():
         write["datatype"].setValue("32 bit float")
     if "colorspace" in write.knobs():
@@ -296,7 +305,8 @@ def render_node(node=None):
     node = node or nuke.thisNode()
     nuke.root().begin()
     try:
-        writes = [write for write in nuke.allNodes("Write") if write.input(0) is node]
+        writes = [write for write in nuke.allNodes("Write")
+                  if write.input(0) is node and "verify_write_ready" in write["beforeRender"].value()]
         if not writes:
             raise ValueError("Create Export Write and set its EXR sequence path first")
         if len(writes) > 1:
