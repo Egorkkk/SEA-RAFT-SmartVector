@@ -266,7 +266,12 @@ def export_write(node=None):
     node = node or nuke.thisNode()
     if node.input(0) is None:
         raise ValueError("Connect an upstream image first")
-    write = nuke.nodes.Write(inputs=[node])
+    # A Group's PyScript knob runs with the Group as the current graph.
+    nuke.root().begin()
+    try:
+        write = nuke.nodes.Write(inputs=[node])
+    finally:
+        nuke.root().end()
     write["file_type"].setValue("exr")
     write["channels"].setValue("all")
     if "datatype" in write.knobs():
@@ -274,14 +279,29 @@ def export_write(node=None):
     if "colorspace" in write.knobs():
         options = write["colorspace"].values()
         write["colorspace"].setValue("raw" if "raw" in options else "linear")
-    write.addKnob(nuke.Tab_Knob("sea_raft_write", "SEA-RAFT"))
-    write.addKnob(nuke.PyScript_Knob("generate_render", "Generate + Render",
-                                    "import smartvector.nuke_node as sv; sv.render_write(nuke.thisNode())"))
     write["beforeRender"].setValue(
         "import smartvector.nuke_node as sv; sv.verify_write_ready(nuke.thisNode())")
     write.setXYpos(node.xpos(), node.ypos() + 120)
-    _set_status(node, "Set EXR path on Write, then Generate + Render")
+    _set_status(node, "Set EXR path on Write, then Generate + Render here")
     return write
+
+
+def render_node(node=None):
+    """Prepare vectors, then execute a connected root-level Write."""
+    node = node or nuke.thisNode()
+    nuke.root().begin()
+    try:
+        writes = [write for write in nuke.allNodes("Write") if write.input(0) is node]
+        if not writes:
+            raise ValueError("Create Export Write and set its EXR sequence path first")
+        if len(writes) > 1:
+            raise ValueError("Multiple Write nodes are connected; keep one direct Export Write")
+        render_write(writes[0])
+    except Exception as exc:
+        _set_status(node, f"Error: {exc}")
+        raise
+    finally:
+        nuke.root().end()
 
 
 def verify_write_ready(write=None):
@@ -290,11 +310,11 @@ def verify_write_ready(write=None):
     if node is None or "sea_raft" not in node.knobs():
         raise RuntimeError("Export Write must be connected to a SEA-RAFT SmartVector node")
     if _cache_pattern(node) != _work_pattern(node, write):
-        raise RuntimeError("Use Generate + Render on the Write node to prepare this output path")
+        raise RuntimeError("Use Generate + Render on the SmartVector node to prepare this output path")
     first, last = _range(node, node.input(0))
     _activate(node, first, last)
     if _knob(node, "status") != "Prepared":
-        raise RuntimeError("SmartVectors are not ready. Use Generate + Render on the Write node")
+        raise RuntimeError("SmartVectors are not ready. Use Generate + Render on the SmartVector node")
 
 
 def render_write(write=None):
@@ -341,6 +361,8 @@ def _add_ui(group, saved=None):
     group.addKnob(nuke.Text_Knob("export_heading", "Export", ""))
     group.addKnob(nuke.PyScript_Knob("exportWrite", "Export Write",
                                      "import smartvector.nuke_node as sv; sv.export_write(nuke.thisNode())"))
+    group.addKnob(nuke.PyScript_Knob("generateRender", "Generate + Render",
+                                     "import smartvector.nuke_node as sv; sv.render_node(nuke.thisNode())"))
     status = nuke.String_Knob("status", "Status")
     status.setFlag(nuke.READ_ONLY)
     group.addKnob(status)
@@ -403,8 +425,14 @@ def create():
 
 def upgrade_node(node):
     """Update Groups saved with the previous cache-oriented controls in place."""
-    if node.Class() != "Group" or "sea_raft" not in node.knobs() or "exportWrite" in node.knobs():
+    if node.Class() != "Group" or "sea_raft" not in node.knobs():
         return False
+    if "exportWrite" in node.knobs():
+        if "generateRender" in node.knobs():
+            return False
+        node.addKnob(nuke.PyScript_Knob("generateRender", "Generate + Render",
+                                        "import smartvector.nuke_node as sv; sv.render_node(nuke.thisNode())"))
+        return True
     old_pattern = _cache_pattern(node)
     saved = {name: _knob(node, name) for name in ("range_mode", "first", "last", "max_dimension",
                                                  "levels", "python_path", "sea_raft_root", "preprocess",

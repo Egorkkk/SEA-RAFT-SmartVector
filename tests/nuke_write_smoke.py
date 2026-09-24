@@ -22,12 +22,16 @@ group["last"].setValue(2)
 group["max_dimension"].setValue(128)
 group["work_id"].setValue("smoke")
 group["overwrite"].setValue(True)
-write = nuke_node.export_write(group)
+writes_before = set(nuke.allNodes("Write"))
+group["exportWrite"].execute()
+new_writes = set(nuke.allNodes("Write")) - writes_before
+assert len(new_writes) == 1
+write = new_writes.pop()
 assert write["datatype"].value() == "32 bit float"
 test_dir = root / ".runtime" / "nuke_write_smoke"
 test_dir.mkdir(parents=True, exist_ok=True)
 write["file"].setValue((test_dir / "final.####.exr").as_posix())
-nuke_node.render_write(write)
+group["generateRender"].execute()
 assert (test_dir / "final.0001.exr").is_file()
 assert (test_dir / "final.0002.exr").is_file()
 final = nuke.nodes.Read(file=(test_dir / "final.0001.exr").as_posix())

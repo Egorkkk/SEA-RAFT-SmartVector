@@ -16,7 +16,7 @@ Open PowerShell in this repository and run:
 
 For a dry run, use `-Plan`. The installer downloads the official `uv` binary into `.runtime`, creates an isolated Python 3.10.13 environment there, checks out a pinned SEA-RAFT revision, installs PyTorch 2.2.0 CUDA 12.1 and OpenEXR 3.3.3, downloads the model weights, runs a CUDA and EXR test, and adds this plugin to `%USERPROFILE%\.nuke\init.py`. It records the runtime paths in `smartvector/install_config.json`; newly created nodes use those paths automatically. The `.runtime` directory and config file are gitignored. The first run downloads a multi-gigabyte PyTorch wheel and model weights. Re-running the script reuses the installation.
 
-Restart Nuke and create **SEA-RAFT → SEA-RAFT SmartVector** from the Nodes menu. Connect the image graph, click **Export Write**, set the new Write node's EXR sequence path, then click **Generate + Render** on its SEA-RAFT tab. The Write node outputs all channels as 32-bit float EXR. Existing Groups from the previous version are upgraded when a script opens, or with **SEA-RAFT → Upgrade Existing Nodes**.
+Restart Nuke and create **SEA-RAFT → SEA-RAFT SmartVector** from the Nodes menu. Connect the image graph, click **Export Write**, set the new Write node's EXR sequence path, then click **Generate + Render** on the SmartVector node. The Write node outputs all channels as 32-bit float EXR. Existing Groups from the previous version are upgraded when a script opens, or with **SEA-RAFT → Upgrade Existing Nodes**.
 
 Advanced options: `-RuntimeDirectory D:\NukeAIRuntime` places downloads and the environment on another drive; `-SkipNukeRegistration` leaves `init.py` untouched. If Windows blocks running local scripts, use `powershell -ExecutionPolicy Bypass -File .\scripts\install_windows.ps1` from the repository root.
 
@@ -25,8 +25,8 @@ The Group output contains the original input channels plus `smartvector_f01_v01`
 ## Write and working files
 
 - **Input** frame range uses an immediately connected Read node's range. For any other graph it uses the project range. **Custom** provides explicit bounds.
-- **Generate + Render** first uses a temporary Write to materialize the actual upstream image, runs the external worker, then renders the final output through the connected Write. Nuke cannot start another `nuke.execute` from a Write `beforeRender` callback, so use the dedicated button for a fresh bake and render.
-- Working EXRs and metadata live in a hidden `.sea_raft_work/<node-id>` folder beside the final Write path. They are intermediate files, and the Write path is the deliverable. The worker hashes the baked input bytes to detect changes on subsequent preparations.
+- **Generate + Render** on the SmartVector node first uses a temporary Write to materialize the actual upstream image, runs the external worker, then renders the final output through the connected Write. Nuke cannot start another `nuke.execute` from a Write `beforeRender` callback. A normal render of the Write works after preparation; its callback rejects stale or missing vectors.
+- Working EXRs and metadata live in a hidden `.sea_raft_work/<node-id>` folder beside the final Write path. This folder must remain available while the Nuke script uses the internal Read node. Nuke's system disk cache can be purged, so it is not used for these persistent vectors. The Write path is the deliverable. The worker hashes the baked input bytes to detect changes on subsequent preparations.
 - **Inference Max Dimension** sets the largest model input dimension; `0` uses the full input format. Vector magnitudes are scaled back independently on X and Y.
 - **Clamp** maps input RGB into `[0, 1]`; **Normalize** uses its 1st and 99th percentiles per frame; **Raw** passes source values through. None changes pixel coordinates. Input is rendered with Nuke Write's `raw` colorspace when available, otherwise `linear`.
 - `smartvectors.json` stores the working fingerprint and settings. Completed working EXRs are written atomically and can be skipped on retry when the fingerprint matches. A cancelled job keeps completed frames for resume. If settings or input change, enable **Overwrite Existing** or choose a new Write path.
@@ -44,4 +44,4 @@ Run this from the repository root or place it on `PYTHONPATH`. The worker emits 
 
 ## Validation
 
-The installer was run on native Windows with an RTX 4060 Ti and driver 595.79. A headless Nuke 17 test passed the full two-frame **Generate + Render** path through a Write node; the final EXR contained RGB and all 28 SmartVector channels as 32-bit float. A short shot should still be checked visually in stock `VectorDistort`.
+The installer was run on native Windows with an RTX 4060 Ti and driver 595.79. A headless Nuke 17 test clicked the **Export Write** and **Generate + Render** knobs and passed the full two-frame render; the final EXR contained RGB and all 28 SmartVector channels as 32-bit float. A short shot should still be checked visually in stock `VectorDistort`.

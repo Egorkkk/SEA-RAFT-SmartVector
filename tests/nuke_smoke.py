@@ -17,6 +17,7 @@ assert group.input(0) is source
 assert group.Class() == "Group"
 assert group["max_dimension"].value() == 1280
 assert "exportWrite" in group.knobs()
+assert "generateRender" in group.knobs()
 assert "cache_path" not in group.knobs()
 config_path = root / "smartvector" / "install_config.json"
 if config_path.is_file():
@@ -32,7 +33,11 @@ channels = set(group.channels())
 assert "smartvector_f01_v01.n_u" in channels, sorted(channels)
 assert "smartvector_f64_v01.p_v" in channels, sorted(channels)
 assert "rgba.red" in channels, sorted(channels)
-write = nuke_node.export_write(group)
+writes_before = set(nuke.allNodes("Write"))
+group["exportWrite"].execute()
+new_writes = set(nuke.allNodes("Write")) - writes_before
+assert len(new_writes) == 1, f"Export Write button created {len(new_writes)} nodes"
+write = new_writes.pop()
 assert write.input(0) is group
 assert write["channels"].value() == "all"
 assert "verify_write_ready" in write["beforeRender"].value()
@@ -63,7 +68,11 @@ legacy.addKnob(nuke.String_Knob("file_name", "Filename"))
 legacy["file_name"].setValue("smartvector.####.exr")
 assert nuke_node.upgrade_node(legacy)
 assert "exportWrite" in legacy.knobs() and "cache_path" not in legacy.knobs()
+assert "generateRender" in legacy.knobs()
 assert "expandFilename" not in legacy["status"].value()
+group.removeKnob(group["generateRender"])
+assert nuke_node.upgrade_node(group)
+assert "generateRender" in group.knobs()
 input_exr = root / "tests" / "smoke_input.0001.exr"
 nuke_node._bake(group, source, 1, 1, str(root / "tests" / "smoke_input.####.exr"))
 assert input_exr.is_file()
