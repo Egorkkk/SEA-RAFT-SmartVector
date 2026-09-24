@@ -1,0 +1,9 @@
+__pycache__/
+.pytest_cache/
+*.py[cod]
+SMARTVECTORS/
+*.exr
+*.exr.partial
+.source/
+job.json
+smartvectors.json
