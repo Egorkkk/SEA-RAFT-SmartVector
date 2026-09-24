@@ -19,6 +19,16 @@ def _knob(node, name):
     return node[name].value()
 
 
+def _install_config():
+    path = Path(__file__).with_name("install_config.json")
+    if not path.is_file():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
 def _cache_pattern(node):
     directory = Path(nuke.expandFilename(_knob(node, "cache_path"))).expanduser().resolve()
     file_name = _knob(node, "file_name")
@@ -139,6 +149,11 @@ def _run_worker(node, job_path, python_path):
     environment = QtCore.QProcessEnvironment.systemEnvironment()
     root = str(Path(__file__).resolve().parent.parent)
     environment.insert("PYTHONPATH", root + os.pathsep + environment.value("PYTHONPATH"))
+    installed = _install_config()
+    if installed.get("hf_home"):
+        environment.insert("HF_HOME", installed["hf_home"])
+    if installed.get("torch_home"):
+        environment.insert("TORCH_HOME", installed["torch_home"])
     process.setProcessEnvironment(environment)
     process.setProgram(python_path)
     process.setArguments(["-m", "smartvector.worker", str(job_path)])
@@ -210,6 +225,7 @@ def generate(node=None):
 
 
 def create():
+    installed = _install_config()
     selected = nuke.selectedNodes()
     upstream = selected[0] if len(selected) == 1 else None
     group = nuke.nodes.Group(name="SEA_RAFT_SmartVector")
@@ -252,8 +268,9 @@ def create():
                                      "import smartvector.nuke_node as sv; sv.refresh(nuke.thisNode())"))
     group.addKnob(nuke.Tab_Knob("advanced", "Advanced"))
     group.addKnob(nuke.File_Knob("python_path", "SEA-RAFT Python"))
-    group["python_path"].setValue(sys.executable)
+    group["python_path"].setValue(installed.get("python_path", sys.executable))
     group.addKnob(nuke.File_Knob("sea_raft_root", "SEA-RAFT Repository"))
+    group["sea_raft_root"].setValue(installed.get("sea_raft_root", ""))
     group.addKnob(nuke.Enumeration_Knob("preprocess", "Input Preprocessing", ["Clamp", "Normalize", "Raw"]))
     group.addKnob(nuke.Boolean_Knob("overwrite", "Overwrite Existing"))
     group.addKnob(nuke.Boolean_Knob("invert_v", "Invert V"))

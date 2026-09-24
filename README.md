@@ -2,20 +2,23 @@
 
 This plugin bakes the connected Nuke image stream to a temporary RGB EXR sequence, runs SEA-RAFT in a separate Python process, writes 32-bit float SmartVector EXRs, and reads the cached vector channels back into the source image stream. Inference never runs during normal Nuke frame evaluation.
 
-The worker uses the official [SEA-RAFT](https://github.com/princeton-vl/SEA-RAFT) `spring-M` configuration and `MemorySlices/Tartan-C-T-TSKH-spring540x960-M` checkpoint. Its Python environment needs the upstream SEA-RAFT requirements plus `OpenEXR` and `numpy`. The checkpoint is downloaded by Hugging Face on first use unless `model` in `job.json` points to a local checkpoint. CUDA is currently required by the Nuke UI.
+The worker uses the official [SEA-RAFT](https://github.com/princeton-vl/SEA-RAFT) `spring-M` configuration and `MemorySlices/Tartan-C-T-TSKH-spring540x960-M` checkpoint. CUDA is currently required by the Nuke UI.
 
-## Install
+## Install on Windows
 
-1. Clone or install the official SEA-RAFT repository and prepare its CUDA Python environment according to its README.
-2. Install `OpenEXR` in that environment, for example `python -m pip install OpenEXR`.
-3. Add this repository's `nuke_plugin` directory to Nuke's plugin path in your `~/.nuke/init.py`:
+No WSL, virtual machine, system Python 3.10, or separate CUDA Toolkit installation is needed. You need a 64-bit Windows machine with an NVIDIA GPU and compatible driver, Git for Windows, PowerShell, internet access, and Nuke.
 
-   ```python
-   import nuke
-   nuke.pluginAddPath(r"E:/EdgeSolver/nuke_plugin")
-   ```
+Open PowerShell in this repository and run:
 
-4. Restart Nuke. Create **SEA-RAFT → SEA-RAFT SmartVector** from the Nodes menu. Connect the image graph, set **SEA-RAFT Python** and **SEA-RAFT Repository**, choose a cache directory, and click **Generate SmartVectors**.
+```powershell
+.\scripts\install_windows.ps1
+```
+
+For a dry run, use `-Plan`. The installer downloads the official `uv` binary into `.runtime`, creates an isolated Python 3.10.13 environment there, checks out a pinned SEA-RAFT revision, installs PyTorch 2.2.0 CUDA 12.1 and OpenEXR 3.3.3, downloads the model weights, runs a CUDA and EXR test, and adds this plugin to `%USERPROFILE%\.nuke\init.py`. It records the runtime paths in `smartvector/install_config.json`; newly created nodes use those paths automatically. The `.runtime` directory and config file are gitignored. The first run downloads a multi-gigabyte PyTorch wheel and model weights. Re-running the script reuses the installation.
+
+Restart Nuke and create **SEA-RAFT → SEA-RAFT SmartVector** from the Nodes menu. Connect the image graph, choose a cache directory, and click **Generate SmartVectors**.
+
+Advanced options: `-RuntimeDirectory D:\NukeAIRuntime` places downloads and the environment on another drive; `-SkipNukeRegistration` leaves `init.py` untouched. If Windows blocks running local scripts, use `powershell -ExecutionPolicy Bypass -File .\scripts\install_windows.ps1` from the repository root.
 
 The Group output contains the original input channels plus `smartvector_f01_v01` through `smartvector_f64_v01`, each with `p_u`, `p_v`, `n_u`, `n_v`. Connect it to a stock `VectorDistort`. The `n` channels describe forward flow and `p` backward flow. Absent clip-edge or non-anchor vectors are zero.
 
@@ -38,6 +41,6 @@ python -m smartvector.worker /path/to/job.json
 
 Run this from the repository root or place it on `PYTHONPATH`. The worker emits `PROGRESS`, `FRAME`, and `DONE` lines for UI integration. `job.json` requires `input`, `output` (each containing `####`), `first`, `last`, `width`, `height`, `max_dimension`, `levels`, and `sea_raft_root`.
 
-## Current validation boundary
+## Validation
 
-The planning tests run without Nuke or CUDA. A headless Nuke 17 smoke test creates and serializes the Group, merges a supplied reference SmartVector EXR with RGB, and renders a source RGB EXR. The external CUDA worker has not been exercised in this workspace because its SEA-RAFT environment is not available here. Run one short clip through Generate and stock `VectorDistort` in the target environment before production use.
+The installer was run on native Windows with an RTX 4060 Ti and driver 595.79. Its checks passed: PyTorch 2.2.0 CUDA inference through SEA-RAFT, an OpenEXR read/write round trip, and automatic paths in a headless Nuke 17 Group. The full Generate-to-VectorDistort workflow should still be checked on a short shot in the target Nuke project.

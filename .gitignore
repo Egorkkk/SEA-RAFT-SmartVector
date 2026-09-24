@@ -7,3 +7,5 @@ SMARTVECTORS/
 .source/
 job.json
 smartvectors.json
+.runtime/
+smartvector/install_config.json

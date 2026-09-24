@@ -1,5 +1,6 @@
 """Run with Nuke -t to check graph creation and serialization."""
 import sys
+import json
 from pathlib import Path
 
 import nuke
@@ -15,6 +16,11 @@ group = nuke_node.create()
 assert group.input(0) is source
 assert group.Class() == "Group"
 assert group["max_dimension"].value() == 1280
+config_path = root / "smartvector" / "install_config.json"
+if config_path.is_file():
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    assert group["python_path"].value() == config["python_path"]
+    assert group["sea_raft_root"].value() == config["sea_raft_root"]
 read, merge = nuke_node._graph(group)
 assert read is not None and merge is not None
 assert merge["disable"].value()
