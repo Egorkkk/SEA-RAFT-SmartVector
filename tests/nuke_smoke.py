@@ -18,6 +18,8 @@ assert group.Class() == "Group"
 assert group["max_dimension"].value() == 1280
 assert "exportWrite" in group.knobs()
 assert "generateRender" in group.knobs()
+assert group["generateRender"].visible()
+assert list(group.knobs()).index("exportWrite") < list(group.knobs()).index("generateRender") < list(group.knobs()).index("advanced")
 assert "cache_path" not in group.knobs()
 config_path = root / "smartvector" / "install_config.json"
 if config_path.is_file():
@@ -73,6 +75,8 @@ assert "expandFilename" not in legacy["status"].value()
 group.removeKnob(group["generateRender"])
 assert nuke_node.upgrade_node(group)
 assert "generateRender" in group.knobs()
+assert group["generateRender"].visible()
+assert list(group.knobs()).index("exportWrite") < list(group.knobs()).index("generateRender") < list(group.knobs()).index("advanced")
 input_exr = root / "tests" / "smoke_input.0001.exr"
 nuke_node._bake(group, source, 1, 1, str(root / "tests" / "smoke_input.####.exr"))
 assert input_exr.is_file()

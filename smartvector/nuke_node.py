@@ -15,6 +15,11 @@ from .core import LEVELS, MODEL, frame_path, inference_size
 _OLD_KNOBS = ("sea_raft", "status", "range_mode", "first", "last", "max_dimension", "levels",
               "cache_path", "file_name", "generate", "refresh", "advanced", "python_path",
               "sea_raft_root", "preprocess", "overwrite", "invert_v")
+_CURRENT_UI_KNOBS = ("sea_raft", "gpu_info", "use_gpu", "settings_heading", "max_dimension",
+                     "levels", "export_heading", "exportWrite", "generateRender", "status",
+                     "advanced", "range_mode", "first", "last", "work_directory", "preprocess",
+                     "overwrite", "refresh", "python_path", "sea_raft_root", "invert_v",
+                     "work_id", "work_pattern", "advanced_end")
 
 
 def _knob(node, name):
@@ -430,8 +435,17 @@ def upgrade_node(node):
     if "exportWrite" in node.knobs():
         if "generateRender" in node.knobs():
             return False
-        node.addKnob(nuke.PyScript_Knob("generateRender", "Generate + Render",
-                                        "import smartvector.nuke_node as sv; sv.render_node(nuke.thisNode())"))
+        saved = {name: _knob(node, name) for name in ("range_mode", "first", "last", "max_dimension",
+                                                     "levels", "work_directory", "python_path",
+                                                     "sea_raft_root", "preprocess", "overwrite",
+                                                     "invert_v", "work_id", "work_pattern")
+                 if name in node.knobs()}
+        node["knobChanged"].setValue("")
+        for name in reversed(_CURRENT_UI_KNOBS):
+            if name in node.knobs():
+                node.removeKnob(node[name])
+        _add_ui(node, saved)
+        refresh(node)
         return True
     old_pattern = _cache_pattern(node)
     saved = {name: _knob(node, name) for name in ("range_mode", "first", "last", "max_dimension",
