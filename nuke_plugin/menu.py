@@ -10,3 +10,5 @@ from smartvector import nuke_node
 
 nuke.menu("Nodes").addCommand("SEA-RAFT/SEA-RAFT SmartVector", nuke_node.create,
                                icon="SmartVector.png")
+nuke.menu("Nodes").addCommand("SEA-RAFT/Upgrade Existing Nodes", nuke_node.upgrade_existing)
+nuke.addOnScriptLoad(nuke_node.upgrade_existing)

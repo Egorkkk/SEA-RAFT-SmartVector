@@ -9,3 +9,4 @@ job.json
 smartvectors.json
 .runtime/
 smartvector/install_config.json
+.sea_raft_work/

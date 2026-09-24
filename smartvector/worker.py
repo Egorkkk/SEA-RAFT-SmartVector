@@ -12,6 +12,11 @@ from .core import CHANNELS, cache_identity, fingerprint, frame_pairs, frame_path
 
 
 def _dependencies():
+    # Nuke sets a process DLL directory that Windows passes to child processes.
+    # Its OpenEXR libraries can crash the worker's OpenEXR wheel during I/O.
+    if os.name == "nt":
+        import ctypes
+        ctypes.windll.kernel32.SetDllDirectoryW(None)
     try:
         import numpy as np
         import torch
@@ -28,14 +33,24 @@ def _read_rgb(path: Path, width: int, height: int, np, OpenEXR, Imath):
         raise FileNotFoundError(path)
     source = OpenEXR.InputFile(str(path))
     try:
-        window = source.header()["dataWindow"]
-        actual = (window.max.x - window.min.x + 1, window.max.y - window.min.y + 1)
-        if actual != (width, height) or (window.min.x, window.min.y) != (0, 0):
-            raise ValueError(f"Expected full-frame {width}x{height} EXR at origin: {path}; got {actual}")
+        header = source.header()
+        window = header["dataWindow"]
+        display = header.get("displayWindow", window)
+        actual = (display.max.x - display.min.x + 1, display.max.y - display.min.y + 1)
+        if actual != (width, height):
+            raise ValueError(f"Expected displayWindow {width}x{height}: {path}; got {actual}")
+        data_width = window.max.x - window.min.x + 1
+        data_height = window.max.y - window.min.y + 1
+        x0, x1 = max(window.min.x, display.min.x), min(window.max.x, display.max.x) + 1
+        y0, y1 = max(window.min.y, display.min.y), min(window.max.y, display.max.y) + 1
         pixel_type = Imath.PixelType(Imath.PixelType.FLOAT)
-        channels = [np.frombuffer(source.channel(channel, pixel_type), dtype=np.float32).reshape(height, width)
-                    for channel in ("R", "G", "B")]
-        return np.stack(channels, axis=-1).copy()
+        image = np.zeros((height, width, 3), dtype=np.float32)
+        if x0 < x1 and y0 < y1:
+            for index, channel in enumerate(("R", "G", "B")):
+                data = np.frombuffer(source.channel(channel, pixel_type), dtype=np.float32).reshape(data_height, data_width)
+                image[y0 - display.min.y:y1 - display.min.y, x0 - display.min.x:x1 - display.min.x, index] = \
+                    data[y0 - window.min.y:y1 - window.min.y, x0 - window.min.x:x1 - window.min.x]
+        return image
     finally:
         source.close()
 

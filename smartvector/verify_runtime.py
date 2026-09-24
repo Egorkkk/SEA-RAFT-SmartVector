@@ -14,6 +14,7 @@ def main():
     parser.add_argument("--sea-raft-root", required=True)
     args = parser.parse_args()
     np, torch, _, OpenEXR, Imath = _dependencies()
+    print("Checking CUDA and OpenEXR", flush=True)
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is unavailable in this PyTorch environment")
     with tempfile.TemporaryDirectory() as directory:
@@ -24,6 +25,7 @@ def main():
         image = _read_rgb(path, 2, 2, np, OpenEXR, Imath)
         if image.shape != (2, 2, 3) or image[0, 0, 0] != 1:
             raise RuntimeError("OpenEXR round-trip failed")
+    print("Loading model and baking two frames", flush=True)
     with tempfile.TemporaryDirectory() as directory:
         directory = Path(directory)
         input_pattern = str(directory / "input.####.exr")
